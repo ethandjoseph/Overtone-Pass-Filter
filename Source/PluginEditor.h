@@ -13,12 +13,10 @@ public:
 
 private:
     juce::Slider frequencySlider;
-    juce::Slider qKnob;
     juce::Label frequencyLabel;
-    juce::Label qLabel;
     juce::Slider gainSlider;
+	juce::Label gainLabel;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> frequencySliderAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> qKnobAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> gainSliderAttachment;
     OvertonePassFilterAudioProcessor& audioProcessor;
 

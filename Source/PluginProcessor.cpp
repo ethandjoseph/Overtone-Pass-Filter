@@ -140,27 +140,91 @@ void OvertonePassFilterAudioProcessor::processBlock (juce::AudioBuffer<float>& b
         buffer.clear(i, 0, buffer.getNumSamples());
 
     float note = apvts.getRawParameterValue("NOTE")->load();
-    //float frequency = apvts.getRawParameterValue("FREQUENCY")->load();
     float frequency = juce::MidiMessage::getMidiNoteInHertz(note);
-    float resonance = apvts.getRawParameterValue("R")->load();
     float gainValue = apvts.getRawParameterValue("GAIN_DB")->load();
-    float linearGain = juce::Decibels::decibelsToGain(-18.0);//(gainValue);
+    float linearGain = juce::Decibels::decibelsToGain(gainValue);
 
-    bandPassFilter1.setCutoffFrequency(frequency);
-    bandPassFilter2.setCutoffFrequency(2 * frequency);
-    bandPassFilter3.setCutoffFrequency(4 * frequency);
-    bandPassFilter4.setCutoffFrequency(8 * frequency);
-    bandPassFilter1.setResonance(8.0);//(resonance);
-    bandPassFilter2.setResonance(8.0);//(resonance);
-    bandPassFilter3.setResonance(8.0);//(resonance);
-    bandPassFilter4.setResonance(8.0);//(resonance);
-
+    //===========================================================================
     juce::AudioBuffer<float> tempBuffer1, tempBuffer2, tempBuffer3, tempBuffer4;
 
     tempBuffer1.makeCopyOf(buffer);
     tempBuffer2.makeCopyOf(buffer);
     tempBuffer3.makeCopyOf(buffer);
     tempBuffer4.makeCopyOf(buffer);
+    //===========================================================================
+
+
+	bool filterBypass1, filterBypass2, filterBypass3, filterBypass4 = false;
+
+	if ((8*frequency) > 20000.)
+	{
+		filterBypass4 = true;
+		tempBuffer4.clear();
+		bandPassFilter4.reset();
+	}
+    else
+    {
+        filterBypass4 = false;
+    }
+
+	if ((4*frequency) > 20000.)
+	{
+		filterBypass3 = true;
+        tempBuffer3.clear();
+		bandPassFilter3.reset();
+	}
+    else
+	{
+		filterBypass3 = false;
+	}
+
+	if ((2*frequency) > 20000.)
+	{
+		filterBypass2 = true;
+        tempBuffer2.clear();
+		bandPassFilter2.reset();
+	}
+	else
+	{
+		filterBypass2 = false;
+	}
+
+	if (frequency > 20000.)
+	{
+		filterBypass1 = true;
+        tempBuffer1.clear();
+		bandPassFilter1.reset();
+	}
+	else
+	{
+		filterBypass1 = false;
+	}
+
+	if (!filterBypass1)
+	{
+		bandPassFilter1.setCutoffFrequency(frequency);
+		bandPassFilter1.setResonance(8.0);//(resonance);
+	}
+
+	if (!filterBypass2)
+	{
+        bandPassFilter2.setCutoffFrequency(2 * frequency);
+        bandPassFilter2.setResonance(8.0);//(resonance);
+
+	}
+    
+	if (!filterBypass3)
+	{
+		bandPassFilter3.setCutoffFrequency(4 * frequency);
+        bandPassFilter3.setResonance(8.0);//(resonance);
+
+	}
+
+    if (!filterBypass4)
+    {
+        bandPassFilter4.setCutoffFrequency(8 * frequency);
+        bandPassFilter4.setResonance(8.0);//(resonance);
+    }
 
     auto audioBlock1 = juce::dsp::AudioBlock<float>(tempBuffer1);
     auto audioBlock2 = juce::dsp::AudioBlock<float>(tempBuffer2);
@@ -177,9 +241,10 @@ void OvertonePassFilterAudioProcessor::processBlock (juce::AudioBuffer<float>& b
     bandPassFilter3.process(context3);
     bandPassFilter4.process(context4);
 
-    /*auto audioBlock = juce::dsp::AudioBlock<float>(buffer);
-    auto context = juce::dsp::ProcessContextReplacing<float>(audioBlock);
-    bandPassFilter.process(context);*/
+	float filterGain1 = juce::Decibels::decibelsToGain(0.);
+	float filterGain2 = juce::Decibels::decibelsToGain(-2.);
+	float filterGain3 = juce::Decibels::decibelsToGain(-4.);
+	float filterGain4 = juce::Decibels::decibelsToGain(-6.);
 
     for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
     {
@@ -191,16 +256,18 @@ void OvertonePassFilterAudioProcessor::processBlock (juce::AudioBuffer<float>& b
 
         for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
         {
-            mainBuffer[sample] = data1[sample] + data2[sample] + data3[sample] + data4[sample];
+            mainBuffer[sample] = data1[sample] + filterGain2*data2[sample] + filterGain3*data3[sample] + filterGain4*data4[sample];
         }
     }
 
+    float gainCompensation = juce::Decibels::decibelsToGain(-18.0);
     for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
     {
         auto* channelData = buffer.getWritePointer(channel);
 
         for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
         {
+            channelData[sample] *= gainCompensation;
             channelData[sample] *= linearGain;
         }
     }
@@ -230,39 +297,19 @@ juce::AudioProcessorValueTreeState::ParameterLayout OvertonePassFilterAudioProce
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        "FREQUENCY",               // Parameter ID
-        "Centre Frequency",        // Parameter name
-        juce::NormalisableRange{
-                    20.f,          // rangeStart
-                    20000.f,       // rangeEnd
-                    0.1f,          // intervalValue
-                    0.2f,          // skewFactor
-                    false },       // useSymmetricSkew
-                    -12.0f         // Default value
-                    ));
-
-    params.push_back(std::make_unique<juce::AudioParameterFloat>(
         "NOTE",                // Parameter ID
         "Note",                // Parameter name
         juce::NormalisableRange<float>(0.0f, 127.0f, 1.0f),
         60                     // Default value
-    ));
+        ));
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        "R",                // Parameter ID
-        "Resonance",        // Parameter name
-        0.707f,             // minValue
-        8.000f,             // maxValue
-        0.707f              // Default value
-    ));
-
-    params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        "GAIN_DB",                // Parameter ID
-        "Gain in dB",        // Parameter name
-        -60.f,             // minValue
-        12.f,             // maxValue
-        0.f              // Default value
-    ));
+        "GAIN_DB",             // Parameter ID
+        "Gain in dB",          // Parameter name
+        -60.f,                 // minValue
+        6.f,                   // maxValue
+        0.f                    // Default value
+        ));
 
     return { params.begin(), params.end() };
 }
