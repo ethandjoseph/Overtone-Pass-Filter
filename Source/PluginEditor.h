@@ -1,26 +1,33 @@
+/*
+  ==============================================================================
+
+    This file contains the basic framework code for a JUCE plugin editor.
+
+  ==============================================================================
+*/
+
 #pragma once
+
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
 
-class BandpassFilterAudioProcessorEditor  : public juce::AudioProcessorEditor
+//==============================================================================
+/**
+*/
+class OvertonePassFilterAudioProcessorEditor  : public juce::AudioProcessorEditor
 {
 public:
-    BandpassFilterAudioProcessorEditor (BandpassFilterAudioProcessor&);
-    ~BandpassFilterAudioProcessorEditor() override;
+    OvertonePassFilterAudioProcessorEditor (OvertonePassFilterAudioProcessor&);
+    ~OvertonePassFilterAudioProcessorEditor() override;
 
+    //==============================================================================
     void paint (juce::Graphics&) override;
     void resized() override;
 
 private:
-    juce::Slider frequencySlider;
-    juce::Slider qKnob;
-    juce::Label frequencyLabel;
-    juce::Label qLabel;
-	juce::Slider gainSlider;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> frequencySliderAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> qKnobAttachment;
-	std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> gainSliderAttachment;
-    BandpassFilterAudioProcessor& audioProcessor;
+    // This reference is provided as a quick way for your editor to
+    // access the processor object that created it.
+    OvertonePassFilterAudioProcessor& audioProcessor;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (BandpassFilterAudioProcessorEditor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OvertonePassFilterAudioProcessorEditor)
 };

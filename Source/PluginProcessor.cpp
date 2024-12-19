@@ -1,7 +1,16 @@
+/*
+  ==============================================================================
+
+    This file contains the basic framework code for a JUCE plugin processor.
+
+  ==============================================================================
+*/
+
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
-BandpassFilterAudioProcessor::BandpassFilterAudioProcessor()
+//==============================================================================
+OvertonePassFilterAudioProcessor::OvertonePassFilterAudioProcessor()
 #ifndef JucePlugin_PreferredChannelConfigurations
      : AudioProcessor (BusesProperties()
                      #if ! JucePlugin_IsMidiEffect
@@ -10,22 +19,22 @@ BandpassFilterAudioProcessor::BandpassFilterAudioProcessor()
                       #endif
                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
                      #endif
-                       ),
-    apvts(*this, nullptr, "Parameters", createParameterLayout())
+                       )
 #endif
 {
 }
 
-BandpassFilterAudioProcessor::~BandpassFilterAudioProcessor()
+OvertonePassFilterAudioProcessor::~OvertonePassFilterAudioProcessor()
 {
 }
 
-const juce::String BandpassFilterAudioProcessor::getName() const
+//==============================================================================
+const juce::String OvertonePassFilterAudioProcessor::getName() const
 {
     return JucePlugin_Name;
 }
 
-bool BandpassFilterAudioProcessor::acceptsMidi() const
+bool OvertonePassFilterAudioProcessor::acceptsMidi() const
 {
    #if JucePlugin_WantsMidiInput
     return true;
@@ -34,7 +43,7 @@ bool BandpassFilterAudioProcessor::acceptsMidi() const
    #endif
 }
 
-bool BandpassFilterAudioProcessor::producesMidi() const
+bool OvertonePassFilterAudioProcessor::producesMidi() const
 {
    #if JucePlugin_ProducesMidiOutput
     return true;
@@ -43,7 +52,7 @@ bool BandpassFilterAudioProcessor::producesMidi() const
    #endif
 }
 
-bool BandpassFilterAudioProcessor::isMidiEffect() const
+bool OvertonePassFilterAudioProcessor::isMidiEffect() const
 {
    #if JucePlugin_IsMidiEffect
     return true;
@@ -52,73 +61,64 @@ bool BandpassFilterAudioProcessor::isMidiEffect() const
    #endif
 }
 
-double BandpassFilterAudioProcessor::getTailLengthSeconds() const
+double OvertonePassFilterAudioProcessor::getTailLengthSeconds() const
 {
     return 0.0;
 }
 
-int BandpassFilterAudioProcessor::getNumPrograms()
+int OvertonePassFilterAudioProcessor::getNumPrograms()
 {
-    return 1;
+    return 1;   // NB: some hosts don't cope very well if you tell them there are 0 programs,
+                // so this should be at least 1, even if you're not really implementing programs.
 }
 
-int BandpassFilterAudioProcessor::getCurrentProgram()
+int OvertonePassFilterAudioProcessor::getCurrentProgram()
 {
     return 0;
 }
 
-void BandpassFilterAudioProcessor::setCurrentProgram (int index)
+void OvertonePassFilterAudioProcessor::setCurrentProgram (int index)
 {
 }
 
-const juce::String BandpassFilterAudioProcessor::getProgramName (int index)
+const juce::String OvertonePassFilterAudioProcessor::getProgramName (int index)
 {
     return {};
 }
 
-void BandpassFilterAudioProcessor::changeProgramName (int index, const juce::String& newName)
+void OvertonePassFilterAudioProcessor::changeProgramName (int index, const juce::String& newName)
 {
 }
 
-void BandpassFilterAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
+//==============================================================================
+void OvertonePassFilterAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    juce::dsp::ProcessSpec spec;
-    spec.maximumBlockSize = samplesPerBlock;
-    spec.sampleRate = sampleRate;
-    spec.numChannels = getTotalNumOutputChannels();
-
-    bandPassFilter1.prepare(spec);
-    bandPassFilter1.reset();
-    bandPassFilter1.setType(juce::dsp::StateVariableTPTFilterType::bandpass);
-
-    bandPassFilter2.prepare(spec);
-    bandPassFilter2.reset();
-    bandPassFilter2.setType(juce::dsp::StateVariableTPTFilterType::bandpass);
-
-    bandPassFilter3.prepare(spec);
-    bandPassFilter3.reset();
-    bandPassFilter3.setType(juce::dsp::StateVariableTPTFilterType::bandpass);
-
-    bandPassFilter4.prepare(spec);
-    bandPassFilter4.reset();
-    bandPassFilter4.setType(juce::dsp::StateVariableTPTFilterType::bandpass);
+    // Use this method as the place to do any pre-playback
+    // initialisation that you need..
 }
 
-void BandpassFilterAudioProcessor::releaseResources()
+void OvertonePassFilterAudioProcessor::releaseResources()
 {
+    // When playback stops, you can use this as an opportunity to free up any
+    // spare memory, etc.
 }
 
 #ifndef JucePlugin_PreferredChannelConfigurations
-bool BandpassFilterAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
+bool OvertonePassFilterAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
   #if JucePlugin_IsMidiEffect
     juce::ignoreUnused (layouts);
     return true;
   #else
+    // This is the place where you check if the layout is supported.
+    // In this template code we only support mono or stereo.
+    // Some plugin hosts, such as certain GarageBand versions, will only
+    // load plugins that support stereo bus layouts.
     if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
      && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
         return false;
 
+    // This checks if the input layout matches the output layout
    #if ! JucePlugin_IsSynth
     if (layouts.getMainOutputChannelSet() != layouts.getMainInputChannelSet())
         return false;
@@ -129,145 +129,63 @@ bool BandpassFilterAudioProcessor::isBusesLayoutSupported (const BusesLayout& la
 }
 #endif
 
-// Process Block ==============================================================================
-void BandpassFilterAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
+void OvertonePassFilterAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
     juce::ScopedNoDenormals noDenormals;
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
+
+    // In case we have more outputs than inputs, this code clears any output
+    // channels that didn't contain input data, (because these aren't
+    // guaranteed to be empty - they may contain garbage).
+    // This is here to avoid people getting screaming feedback
+    // when they first compile a plugin, but obviously you don't need to keep
+    // this code if your algorithm always overwrites all the output channels.
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
 
-    float note = apvts.getRawParameterValue("NOTE")->load();
-    //float frequency = apvts.getRawParameterValue("FREQUENCY")->load();
-	float frequency = juce::MidiMessage::getMidiNoteInHertz(note);
-    float resonance = apvts.getRawParameterValue("R")->load();
-    float gainValue = apvts.getRawParameterValue("GAIN_DB")->load();
-    float linearGain = juce::Decibels::decibelsToGain (-18.0);//(gainValue);
-
-    bandPassFilter1.setCutoffFrequency(frequency);
-    bandPassFilter2.setCutoffFrequency(2*frequency);
-    bandPassFilter3.setCutoffFrequency(4*frequency);
-    bandPassFilter4.setCutoffFrequency(8*frequency);
-    bandPassFilter1.setResonance(8.0);//(resonance);
-    bandPassFilter2.setResonance(8.0);//(resonance);
-    bandPassFilter3.setResonance(8.0);//(resonance);
-    bandPassFilter4.setResonance(8.0);//(resonance);
-
-    juce::AudioBuffer<float> tempBuffer1, tempBuffer2, tempBuffer3, tempBuffer4;
-
-    tempBuffer1.makeCopyOf(buffer);
-    tempBuffer2.makeCopyOf(buffer);
-    tempBuffer3.makeCopyOf(buffer);
-    tempBuffer4.makeCopyOf(buffer);
-
-    auto audioBlock1 = juce::dsp::AudioBlock<float>(tempBuffer1);
-    auto audioBlock2 = juce::dsp::AudioBlock<float>(tempBuffer2);
-    auto audioBlock3 = juce::dsp::AudioBlock<float>(tempBuffer3);
-    auto audioBlock4 = juce::dsp::AudioBlock<float>(tempBuffer4);
-
-    auto context1 = juce::dsp::ProcessContextReplacing<float>(audioBlock1);
-    auto context2 = juce::dsp::ProcessContextReplacing<float>(audioBlock2);
-    auto context3 = juce::dsp::ProcessContextReplacing<float>(audioBlock3);
-    auto context4 = juce::dsp::ProcessContextReplacing<float>(audioBlock4);
-
-    bandPassFilter1.process(context1);
-    bandPassFilter2.process(context2);
-    bandPassFilter3.process(context3);
-    bandPassFilter4.process(context4);
-
-    /*auto audioBlock = juce::dsp::AudioBlock<float>(buffer);
-    auto context = juce::dsp::ProcessContextReplacing<float>(audioBlock);
-    bandPassFilter.process(context);*/
-
-    for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+    // This is the place where you'd normally do the guts of your plugin's
+    // audio processing...
+    // Make sure to reset the state if your inner loop is processing
+    // the samples and the outer loop is handling the channels.
+    // Alternatively, you can process the samples with the channels
+    // interleaved by keeping the same state.
+    for (int channel = 0; channel < totalNumInputChannels; ++channel)
     {
-        auto* mainBuffer = buffer.getWritePointer(channel);
-        auto* data1 = tempBuffer1.getReadPointer(channel);
-        auto* data2 = tempBuffer2.getReadPointer(channel);
-        auto* data3 = tempBuffer3.getReadPointer(channel);
-        auto* data4 = tempBuffer4.getReadPointer(channel);
+        auto* channelData = buffer.getWritePointer (channel);
 
-        for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
-        {
-            mainBuffer[sample] = data1[sample] + data2[sample] + data3[sample] + data4[sample];
-        }
+        // ..do something to the data...
     }
-
-    for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
-    {
-        auto* channelData = buffer.getWritePointer(channel);
-
-        for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
-        {
-            channelData[sample] *= linearGain;
-        }
-    }
-    
 }
+
 //==============================================================================
-
-bool BandpassFilterAudioProcessor::hasEditor() const
+bool OvertonePassFilterAudioProcessor::hasEditor() const
 {
-    return true;
+    return true; // (change this to false if you choose to not supply an editor)
 }
 
-juce::AudioProcessorEditor* BandpassFilterAudioProcessor::createEditor()
+juce::AudioProcessorEditor* OvertonePassFilterAudioProcessor::createEditor()
 {
-    return new BandpassFilterAudioProcessorEditor (*this);
+    return new OvertonePassFilterAudioProcessorEditor (*this);
 }
 
-void BandpassFilterAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
+//==============================================================================
+void OvertonePassFilterAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
+    // You should use this method to store your parameters in the memory block.
+    // You could do that either as raw data, or use the XML or ValueTree classes
+    // as intermediaries to make it easy to save and load complex data.
 }
 
-void BandpassFilterAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
+void OvertonePassFilterAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
+    // You should use this method to restore your parameters from this memory block,
+    // whose contents will have been created by the getStateInformation() call.
 }
 
-juce::AudioProcessorValueTreeState::ParameterLayout BandpassFilterAudioProcessor::createParameterLayout()
-{
-    std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
-
-    params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        "FREQUENCY",               // Parameter ID
-        "Centre Frequency",        // Parameter name
-        juce::NormalisableRange{
-                    20.f,          // rangeStart
-                    20000.f,       // rangeEnd
-                    0.1f,          // intervalValue
-                    0.2f,          // skewFactor
-                    false },       // useSymmetricSkew
-                    -12.0f         // Default value
-                    ));
-
-	params.push_back(std::make_unique<juce::AudioParameterFloat>(
-		"NOTE",                // Parameter ID
-		"Note",                // Parameter name
-        juce::NormalisableRange<float>(0.0f, 127.0f, 1.0f),
-		60                     // Default value
-	    ));
-
-    params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        "R",                // Parameter ID
-        "Resonance",        // Parameter name
-        0.707f,             // minValue
-        8.000f,             // maxValue
-        0.707f              // Default value
-        ));
-
-    params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        "GAIN_DB",                // Parameter ID
-        "Gain in dB",        // Parameter name
-        -60.f,             // minValue
-        12.f,             // maxValue
-        0.f              // Default value
-        ));
-
-    return { params.begin(), params.end() };
-}
-
+//==============================================================================
+// This creates new instances of the plugin..
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
-    return new BandpassFilterAudioProcessor();
+    return new OvertonePassFilterAudioProcessor();
 }
