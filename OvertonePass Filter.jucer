@@ -35,7 +35,7 @@
   <EXPORTFORMATS>
     <VS2022 targetFolder="Builds/VisualStudio2022">
       <CONFIGURATIONS>
-        <CONFIGURATION isDebug="1" name="Debug" targetName="OvertonePass Filter" binaryPath="C:\Program Files\Common Files\VST3\Owninstrument\Earth Mover DSP"/>
+        <CONFIGURATION isDebug="1" name="Debug" targetName="OvertonePass Filter"/>
         <CONFIGURATION isDebug="0" name="Release" targetName="OvertonePass Filter"/>
       </CONFIGURATIONS>
       <MODULEPATHS>
