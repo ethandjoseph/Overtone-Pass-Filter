@@ -1,6 +1,6 @@
 # OvertonePass Filter
 
- multi-band pass filter based on JUCE State Variable Filter
+ Multi-band pass filter based on JUCE State Variable Filter
  Uses 4 filters to filter out the note frequency along with 3 even harmonics on top of it.
  Try it out on some white noise or reverb sends, but make sure to send the Note parameter the lead melody note value.
 
