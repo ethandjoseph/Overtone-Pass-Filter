@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <JUCERPROJECT id="LzxdcG" name="OvertonePass Filter" projectType="audioplug"
-              useAppConfig="0" addUsingNamespaceToJuceHeader="0" jucerFormatVersion="1">
+              useAppConfig="0" addUsingNamespaceToJuceHeader="0" jucerFormatVersion="1"
+              pluginFormats="buildStandalone,buildVST3">
   <MAINGROUP id="F1gaQx" name="OvertonePass Filter">
     <GROUP id="{BAF33334-78C1-9F30-6B2B-68A45C9E68D7}" name="Source">
       <FILE id="ucavMv" name="PluginProcessor.cpp" compile="1" resource="0"

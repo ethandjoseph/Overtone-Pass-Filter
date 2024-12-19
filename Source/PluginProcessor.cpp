@@ -1,15 +1,6 @@
-/*
-  ==============================================================================
-
-    This file contains the basic framework code for a JUCE plugin processor.
-
-  ==============================================================================
-*/
-
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
-//==============================================================================
 OvertonePassFilterAudioProcessor::OvertonePassFilterAudioProcessor()
 #ifndef JucePlugin_PreferredChannelConfigurations
      : AudioProcessor (BusesProperties()
@@ -19,7 +10,8 @@ OvertonePassFilterAudioProcessor::OvertonePassFilterAudioProcessor()
                       #endif
                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
                      #endif
-                       )
+                       ),
+    apvts(*this, nullptr, "Parameters", createParameterLayout())
 #endif
 {
 }
@@ -28,7 +20,6 @@ OvertonePassFilterAudioProcessor::~OvertonePassFilterAudioProcessor()
 {
 }
 
-//==============================================================================
 const juce::String OvertonePassFilterAudioProcessor::getName() const
 {
     return JucePlugin_Name;
@@ -68,8 +59,7 @@ double OvertonePassFilterAudioProcessor::getTailLengthSeconds() const
 
 int OvertonePassFilterAudioProcessor::getNumPrograms()
 {
-    return 1;   // NB: some hosts don't cope very well if you tell them there are 0 programs,
-                // so this should be at least 1, even if you're not really implementing programs.
+    return 1;
 }
 
 int OvertonePassFilterAudioProcessor::getCurrentProgram()
@@ -93,14 +83,30 @@ void OvertonePassFilterAudioProcessor::changeProgramName (int index, const juce:
 //==============================================================================
 void OvertonePassFilterAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    // Use this method as the place to do any pre-playback
-    // initialisation that you need..
+    juce::dsp::ProcessSpec spec;
+    spec.maximumBlockSize = samplesPerBlock;
+    spec.sampleRate = sampleRate;
+    spec.numChannels = getTotalNumOutputChannels();
+
+    bandPassFilter1.prepare(spec);
+    bandPassFilter1.reset();
+    bandPassFilter1.setType(juce::dsp::StateVariableTPTFilterType::bandpass);
+
+    bandPassFilter2.prepare(spec);
+    bandPassFilter2.reset();
+    bandPassFilter2.setType(juce::dsp::StateVariableTPTFilterType::bandpass);
+
+    bandPassFilter3.prepare(spec);
+    bandPassFilter3.reset();
+    bandPassFilter3.setType(juce::dsp::StateVariableTPTFilterType::bandpass);
+
+    bandPassFilter4.prepare(spec);
+    bandPassFilter4.reset();
+    bandPassFilter4.setType(juce::dsp::StateVariableTPTFilterType::bandpass);
 }
 
 void OvertonePassFilterAudioProcessor::releaseResources()
 {
-    // When playback stops, you can use this as an opportunity to free up any
-    // spare memory, etc.
 }
 
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -110,15 +116,10 @@ bool OvertonePassFilterAudioProcessor::isBusesLayoutSupported (const BusesLayout
     juce::ignoreUnused (layouts);
     return true;
   #else
-    // This is the place where you check if the layout is supported.
-    // In this template code we only support mono or stereo.
-    // Some plugin hosts, such as certain GarageBand versions, will only
-    // load plugins that support stereo bus layouts.
     if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
      && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
         return false;
 
-    // This checks if the input layout matches the output layout
    #if ! JucePlugin_IsSynth
     if (layouts.getMainOutputChannelSet() != layouts.getMainInputChannelSet())
         return false;
@@ -129,39 +130,86 @@ bool OvertonePassFilterAudioProcessor::isBusesLayoutSupported (const BusesLayout
 }
 #endif
 
+// Process Block ==============================================================================
 void OvertonePassFilterAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
     juce::ScopedNoDenormals noDenormals;
-    auto totalNumInputChannels  = getTotalNumInputChannels();
+    auto totalNumInputChannels = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
-
-    // In case we have more outputs than inputs, this code clears any output
-    // channels that didn't contain input data, (because these aren't
-    // guaranteed to be empty - they may contain garbage).
-    // This is here to avoid people getting screaming feedback
-    // when they first compile a plugin, but obviously you don't need to keep
-    // this code if your algorithm always overwrites all the output channels.
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
-        buffer.clear (i, 0, buffer.getNumSamples());
+        buffer.clear(i, 0, buffer.getNumSamples());
 
-    // This is the place where you'd normally do the guts of your plugin's
-    // audio processing...
-    // Make sure to reset the state if your inner loop is processing
-    // the samples and the outer loop is handling the channels.
-    // Alternatively, you can process the samples with the channels
-    // interleaved by keeping the same state.
-    for (int channel = 0; channel < totalNumInputChannels; ++channel)
+    float note = apvts.getRawParameterValue("NOTE")->load();
+    //float frequency = apvts.getRawParameterValue("FREQUENCY")->load();
+    float frequency = juce::MidiMessage::getMidiNoteInHertz(note);
+    float resonance = apvts.getRawParameterValue("R")->load();
+    float gainValue = apvts.getRawParameterValue("GAIN_DB")->load();
+    float linearGain = juce::Decibels::decibelsToGain(-18.0);//(gainValue);
+
+    bandPassFilter1.setCutoffFrequency(frequency);
+    bandPassFilter2.setCutoffFrequency(2 * frequency);
+    bandPassFilter3.setCutoffFrequency(4 * frequency);
+    bandPassFilter4.setCutoffFrequency(8 * frequency);
+    bandPassFilter1.setResonance(8.0);//(resonance);
+    bandPassFilter2.setResonance(8.0);//(resonance);
+    bandPassFilter3.setResonance(8.0);//(resonance);
+    bandPassFilter4.setResonance(8.0);//(resonance);
+
+    juce::AudioBuffer<float> tempBuffer1, tempBuffer2, tempBuffer3, tempBuffer4;
+
+    tempBuffer1.makeCopyOf(buffer);
+    tempBuffer2.makeCopyOf(buffer);
+    tempBuffer3.makeCopyOf(buffer);
+    tempBuffer4.makeCopyOf(buffer);
+
+    auto audioBlock1 = juce::dsp::AudioBlock<float>(tempBuffer1);
+    auto audioBlock2 = juce::dsp::AudioBlock<float>(tempBuffer2);
+    auto audioBlock3 = juce::dsp::AudioBlock<float>(tempBuffer3);
+    auto audioBlock4 = juce::dsp::AudioBlock<float>(tempBuffer4);
+
+    auto context1 = juce::dsp::ProcessContextReplacing<float>(audioBlock1);
+    auto context2 = juce::dsp::ProcessContextReplacing<float>(audioBlock2);
+    auto context3 = juce::dsp::ProcessContextReplacing<float>(audioBlock3);
+    auto context4 = juce::dsp::ProcessContextReplacing<float>(audioBlock4);
+
+    bandPassFilter1.process(context1);
+    bandPassFilter2.process(context2);
+    bandPassFilter3.process(context3);
+    bandPassFilter4.process(context4);
+
+    /*auto audioBlock = juce::dsp::AudioBlock<float>(buffer);
+    auto context = juce::dsp::ProcessContextReplacing<float>(audioBlock);
+    bandPassFilter.process(context);*/
+
+    for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
     {
-        auto* channelData = buffer.getWritePointer (channel);
+        auto* mainBuffer = buffer.getWritePointer(channel);
+        auto* data1 = tempBuffer1.getReadPointer(channel);
+        auto* data2 = tempBuffer2.getReadPointer(channel);
+        auto* data3 = tempBuffer3.getReadPointer(channel);
+        auto* data4 = tempBuffer4.getReadPointer(channel);
 
-        // ..do something to the data...
+        for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+        {
+            mainBuffer[sample] = data1[sample] + data2[sample] + data3[sample] + data4[sample];
+        }
+    }
+
+    for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+    {
+        auto* channelData = buffer.getWritePointer(channel);
+
+        for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+        {
+            channelData[sample] *= linearGain;
+        }
     }
 }
-
 //==============================================================================
+
 bool OvertonePassFilterAudioProcessor::hasEditor() const
 {
-    return true; // (change this to false if you choose to not supply an editor)
+    return true;
 }
 
 juce::AudioProcessorEditor* OvertonePassFilterAudioProcessor::createEditor()
@@ -169,22 +217,56 @@ juce::AudioProcessorEditor* OvertonePassFilterAudioProcessor::createEditor()
     return new OvertonePassFilterAudioProcessorEditor (*this);
 }
 
-//==============================================================================
 void OvertonePassFilterAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    // You should use this method to store your parameters in the memory block.
-    // You could do that either as raw data, or use the XML or ValueTree classes
-    // as intermediaries to make it easy to save and load complex data.
 }
 
 void OvertonePassFilterAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    // You should use this method to restore your parameters from this memory block,
-    // whose contents will have been created by the getStateInformation() call.
 }
 
-//==============================================================================
-// This creates new instances of the plugin..
+juce::AudioProcessorValueTreeState::ParameterLayout OvertonePassFilterAudioProcessor::createParameterLayout()
+{
+    std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "FREQUENCY",               // Parameter ID
+        "Centre Frequency",        // Parameter name
+        juce::NormalisableRange{
+                    20.f,          // rangeStart
+                    20000.f,       // rangeEnd
+                    0.1f,          // intervalValue
+                    0.2f,          // skewFactor
+                    false },       // useSymmetricSkew
+                    -12.0f         // Default value
+                    ));
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "NOTE",                // Parameter ID
+        "Note",                // Parameter name
+        juce::NormalisableRange<float>(0.0f, 127.0f, 1.0f),
+        60                     // Default value
+    ));
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "R",                // Parameter ID
+        "Resonance",        // Parameter name
+        0.707f,             // minValue
+        8.000f,             // maxValue
+        0.707f              // Default value
+    ));
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "GAIN_DB",                // Parameter ID
+        "Gain in dB",        // Parameter name
+        -60.f,             // minValue
+        12.f,             // maxValue
+        0.f              // Default value
+    ));
+
+    return { params.begin(), params.end() };
+}
+
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new OvertonePassFilterAudioProcessor();
