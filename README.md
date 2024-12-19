@@ -13,7 +13,6 @@ JUCE 8 project consisting of
 
 ### Bugs to be Addressed soon
 1. On loading, Note value shows note number instead of note name
-2. In some hosts, even changing the value only shows note numbber
 
 ## [Release](https://github.com/ethandjoseph/Overtone-Pass-Filter/releases)
 - VST3
