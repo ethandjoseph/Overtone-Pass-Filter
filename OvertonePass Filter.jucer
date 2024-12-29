@@ -2,7 +2,8 @@
 
 <JUCERPROJECT id="LzxdcG" name="OvertonePass Filter" projectType="audioplug"
               useAppConfig="0" addUsingNamespaceToJuceHeader="0" jucerFormatVersion="1"
-              pluginFormats="buildStandalone,buildVST3">
+              pluginFormats="buildAAX,buildAU,buildAUv3,buildLV2,buildStandalone,buildVST3"
+              companyName="Earth Mover DSP" pluginAAXCategory="8192" lv2Uri="http://earthmoverdsp.com/plugins/OvertonePass_Filter">
   <MAINGROUP id="F1gaQx" name="OvertonePass Filter">
     <GROUP id="{BAF33334-78C1-9F30-6B2B-68A45C9E68D7}" name="Source">
       <FILE id="iTpSRV" name="MidiNote.h" compile="0" resource="0" file="Source/MidiNote.h"/>
